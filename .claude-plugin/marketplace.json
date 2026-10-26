@@ -1,0 +1,19 @@
+{
+  "name": "earshot",
+  "description": "Spoken turn summaries and prompts for Claude Code",
+  "owner": {
+    "name": "Krzysztof Lobermajer"
+  },
+  "plugins": [
+    {
+      "name": "earshot",
+      "description": "Speaks a one-sentence summary when Claude Code finishes a turn, and reads out permission prompts and questions. macOS only; needs jq, optional alerter and media-control, see README.",
+      "version": "0.8.0",
+      "source": "./",
+      "category": "productivity",
+      "author": {
+        "name": "Krzysztof Lobermajer"
+      }
+    }
+  ]
+}

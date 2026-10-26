@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-12 -12 124 124">
+  <rect width="100" height="100" rx="22.5" fill="#1F1E1D"/>
+  <g transform="translate(50 50) scale(1.08) translate(-51 -50)">
+    <polyline points="15,38 26,50 15,62" fill="none" stroke="#FAF6EE" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <g stroke="#D97757" stroke-width="4.2" stroke-linecap="round">
+      <line x1="49" y1="47" x2="49" y2="37"/>
+      <line x1="51.121" y1="47.879" x2="55.718" y2="43.282"/>
+      <line x1="52" y1="50" x2="62" y2="50"/>
+      <line x1="51.121" y1="52.121" x2="55.718" y2="56.718"/>
+      <line x1="49" y1="53" x2="49" y2="63"/>
+      <line x1="46.879" y1="52.121" x2="42.282" y2="56.718"/>
+      <line x1="46" y1="50" x2="36" y2="50"/>
+      <line x1="46.879" y1="47.879" x2="42.282" y2="43.282"/>
+    </g>
+    <circle cx="49" cy="50" r="3.6" fill="#D97757"/>
+    <g fill="none" stroke="#FAF6EE" stroke-width="5" stroke-linecap="round">
+      <path d="M68.894 44.215 A9 9 0 0 1 68.894 55.785"/>
+      <path d="M74.257 39.715 A16 16 0 0 1 74.257 60.285" opacity="0.8"/>
+      <path d="M79.619 35.216 A23 23 0 0 1 79.619 64.784" opacity="0.6"/>
+    </g>
+  </g>
+</svg>

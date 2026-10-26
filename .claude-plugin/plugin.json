@@ -1,0 +1,19 @@
+{
+  "name": "earshot",
+  "description": "Speaks a one-sentence summary when Claude Code finishes a turn, and reads out permission prompts and questions. macOS only; needs jq, optional alerter and media-control, see README.",
+  "version": "0.8.0",
+  "author": {
+    "name": "Krzysztof Lobermajer"
+  },
+  "homepage": "https://github.com/klobermajer/earshot",
+  "repository": "https://github.com/klobermajer/earshot",
+  "license": "MIT",
+  "keywords": [
+    "tts",
+    "voice",
+    "speech",
+    "notifications",
+    "hooks",
+    "macos"
+  ]
+}
