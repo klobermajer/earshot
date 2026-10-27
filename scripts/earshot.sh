@@ -197,6 +197,10 @@ speech_rate() {
   printf '%s' "$rate"
 }
 
+prepare_speech() {
+  :
+}
+
 start_speech() {
   printf '%s' "$1" | say -v "$voice" -r "$(speech_rate)" &
   say_pid=$!
@@ -220,6 +224,7 @@ speak_now() {
     banner
     return
   fi
+  prepare_speech "$project: $text" || return
   paused_app=$(pausable_app)
   if [ -n "$paused_app" ]; then
     trap resume_paused_app EXIT

@@ -2,6 +2,7 @@ STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/earshot"
 LOG="${XDG_STATE_HOME:-$HOME/.local/state}/earshot/earshot.log"
 LOCK="$STATE_DIR/lock"
 MUTE="$STATE_DIR/muted-until"
+SPEECH_FILE="$STATE_DIR/speech"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/earshot"
 PIPER="$DATA_DIR/venv/bin/piper"
 VOICES_DIR="$DATA_DIR/voices"
@@ -58,13 +59,19 @@ length_scale() {
   awk -v base="$PIPER_WORDS_PER_MINUTE" -v rate="$(speech_rate)" 'BEGIN { printf "%.2f", base / rate }'
 }
 
+prepare_speech() {
+  printf '%s' "$1" | "$PIPER" -m "$VOICES_DIR/$voice.onnx" --length-scale "$(length_scale)" --output-raw >"$SPEECH_FILE" 2>/dev/null
+  [ -s "$SPEECH_FILE" ] && return
+  log "piper produced no audio for $voice"
+  return 1
+}
+
 start_speech() {
-  local model="$VOICES_DIR/$voice.onnx" rate
-  rate=$(jq -r '.audio.sample_rate' "$model.json")
-  printf '%s' "$1" \
-    | "$PIPER" -m "$model" --length-scale "$(length_scale)" --output-raw 2>/dev/null \
-    | paplay --raw --rate="$rate" --channels=1 --format=s16le &
+  exec 8<"$SPEECH_FILE"
+  rm -f "$SPEECH_FILE"
+  paplay --raw --rate="$(jq -r '.audio.sample_rate' "$VOICES_DIR/$voice.onnx.json")" --channels=1 --format=s16le <&8 &
   say_pid=$!
+  exec 8<&-
 }
 
 list_voices() {
