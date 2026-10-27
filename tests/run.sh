@@ -33,6 +33,11 @@ check "plain defuses say control commands" "$(printf 'Hello [[rate 40]] there' |
 check "plain defuses nested brackets" "$(printf '[]][rate 40][[]' | plain)" "[][rate 40][]"
 check "plain keeps a language tag" "$(printf '[pl] Gotowe' | plain)" "[pl] Gotowe"
 
+check "shorten keeps a short line" "$(shorten 'Done.')" "Done."
+check "shorten cuts a long line for the log" \
+  "$(shorten 'Login page fixed and all tests pass, should I deploy it to production now or wait?')" \
+  "Login page fixed and all tests pass, should I deploy it to p…"
+
 check "first_sentence keeps a version number" \
   "$(printf 'Version 1.2 is out. Next sentence.' | first_sentence)" "Version 1.2 is out."
 check "first_sentence without punctuation keeps the text" \
@@ -106,6 +111,13 @@ echo $(($(date +%s) + 60)) >"$MUTE"
 check "timed mute" "$(muted && echo muted || echo open)" "muted"
 echo $(($(date +%s) - 60)) >"$MUTE"
 check "expired mute" "$(muted && echo muted || echo open)" "open"
+
+STATE_DIR="$work/state-new"
+check "state dir is created private to the user" "$(state_dir_ready && { stat -c %a "$STATE_DIR" 2>/dev/null || stat -f %Lp "$STATE_DIR"; })" "700"
+ln -s "$work/state-new" "$work/state-link"
+STATE_DIR="$work/state-link"
+check "state dir refuses a symlink" "$(state_dir_ready && echo ready || echo refused)" "refused"
+STATE_DIR="$work/state"
 
 real_mic_check=$MIC_CHECK
 MIC_CHECK="$work/mic-check"
