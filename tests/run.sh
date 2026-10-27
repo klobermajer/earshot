@@ -31,6 +31,11 @@ check "plain defuses say control commands" "$(printf 'Hello [[rate 40]] there' |
 check "plain defuses nested brackets" "$(printf '[]][rate 40][[]' | plain)" "[][rate 40][]"
 check "plain keeps a language tag" "$(printf '[pl] Gotowe' | plain)" "[pl] Gotowe"
 
+check "shorten keeps a short line" "$(shorten 'Done.')" "Done."
+check "shorten cuts a long line for the log" \
+  "$(shorten 'Login page fixed and all tests pass, should I deploy it to production now or wait?')" \
+  "Login page fixed and all tests pass, should I deploy it to p…"
+
 check "first_sentence keeps a version number" \
   "$(printf 'Version 1.2 is out. Next sentence.' | first_sentence)" "Version 1.2 is out."
 check "first_sentence without punctuation keeps the text" \
