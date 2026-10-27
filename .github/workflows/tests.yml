@@ -7,9 +7,12 @@ on:
 
 jobs:
   tests:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n scripts/earshot.sh scripts/session-start.sh tests/run.sh
-      - run: python3 -m py_compile scripts/mic-in-use.py
+      - run: bash -n scripts/earshot.sh scripts/session-start.sh scripts/linux.sh scripts/install-piper.sh tests/run.sh
+      - run: python3 -m py_compile scripts/mic-in-use.py scripts/linux-banner.py
       - run: tests/run.sh

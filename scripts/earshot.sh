@@ -2,7 +2,12 @@
 
 [ -n "$EARSHOT_CHILD" ] && exit 0
 
-export LC_ALL=en_US.UTF-8
+PLATFORM=$(uname)
+if [ "$PLATFORM" = Linux ]; then
+  export LC_ALL=C.UTF-8
+else
+  export LC_ALL=en_US.UTF-8
+fi
 
 PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${TMPDIR:-$HOME/Library/Caches}/earshot"
@@ -18,7 +23,10 @@ BANNER_TIMEOUT=120
 LOCK_TIMEOUT=120
 DEFAULT_VOICE="Ava (Premium)"
 FALLBACK_VOICE=Samantha
+VOICE_QUALITY='[(]Premium[)];[(]Enhanced[)]'
 DEFAULT_RATE=185
+SPEECH_COMMAND=say
+REQUIRED_TOOLS=(say lockf jq perl)
 DEFAULT_PAUSE_APPS="com.spotify.client,com.apple.Music,com.apple.podcasts,com.google.Chrome,com.apple.Safari"
 CALL_TITLES="meet|zoom|teams|huddle|webex"
 SUMMARY_TIMEOUT=25
@@ -61,15 +69,22 @@ elapsed_since() {
   perl -MTime::HiRes=time -e 'printf "%.1f", time - $ARGV[0]' "$1"
 }
 
+playing_apps() {
+  command -v media-control >/dev/null || return
+  media-control get 2>/dev/null \
+    | jq -r --arg calls "$CALL_TITLES" 'select(.playing == true and ((.title // "") | test($calls; "i") | not)) | .bundleIdentifier, (.parentApplicationBundleIdentifier // empty)'
+}
+
+pause_app() {
+  media-control pause
+}
+
 pausable_app() {
   flag EARSHOT_MEDIA 1 || return
-  command -v media-control >/dev/null || return
   local allowed
   allowed=$(tr ',' '\n' <<<"${EARSHOT_PAUSE_APPS-$DEFAULT_PAUSE_APPS}" | tr -d '[:blank:]' | grep -v '^$')
   [ -n "$allowed" ] || return
-  media-control get 2>/dev/null \
-    | jq -r --arg calls "$CALL_TITLES" 'select(.playing == true and ((.title // "") | test($calls; "i") | not)) | .bundleIdentifier, (.parentApplicationBundleIdentifier // empty)' \
-    | grep -Fx -m1 -f <(printf '%s\n' "$allowed")
+  playing_apps | grep -Fx -m1 -f <(printf '%s\n' "$allowed")
 }
 
 resume_paused_app() {
@@ -96,8 +111,12 @@ unmute() {
   log "unmuted"
 }
 
+mic_check_available() {
+  xcode-select -p >/dev/null 2>&1
+}
+
 mic_in_use() {
-  xcode-select -p >/dev/null 2>&1 || return 1
+  mic_check_available || return 1
   local ignored status
   ignored=$(/usr/bin/python3 -I "$MIC_CHECK" --ignore "${EARSHOT_MIC_IGNORE-}" 2>>"$LOG")
   status=$?
@@ -106,7 +125,7 @@ mic_in_use() {
 }
 
 stop_speaking() {
-  [ -n "$say_pid" ] && [[ "$(ps -p "$say_pid" -o comm= 2>/dev/null)" =~ (^|/)say$ ]] || return
+  [ -n "$say_pid" ] && [[ "$(ps -p "$say_pid" -o comm= 2>/dev/null)" =~ (^|/)$SPEECH_COMMAND$ ]] || return
   kill "$say_pid"
   log "stopped"
 }
@@ -116,6 +135,24 @@ register_helper_app() {
   "$LSREGISTER" -f "$HELPER_APP" 2>>"$LOG" || return
   printf '%s' "$HELPER_APP" >"$REGISTERED"
   log "registered $HELPER_APP"
+}
+
+alert() {
+  register_helper_app >/dev/null
+  alerter --sender "$HELPER_APP_ID" "$@"
+}
+
+banner_available() {
+  command -v alerter >/dev/null
+}
+
+plain_banner() {
+  osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
+    "$1" "$2" 2>>"$LOG"
+}
+
+remove_banner() {
+  alerter --sender "$HELPER_APP_ID" --remove "$1" >/dev/null 2>>"$LOG"
 }
 
 show_banner() {
@@ -128,8 +165,7 @@ show_banner() {
   else
     options+=(--actions "Mute 30 min")
   fi
-  register_helper_app
-  case $(alerter --sender "$HELPER_APP_ID" --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT") in
+  case $(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT") in
     @CLOSED | Close) stop_speaking ;;
     "Mute 30 min") mute_for 1800; stop_speaking ;;
     Unmute) unmute ;;
@@ -139,19 +175,18 @@ show_banner() {
 banner() {
   local say_pid=$1
   flag EARSHOT_BANNERS 1 || return
-  if command -v alerter >/dev/null; then
+  if banner_available; then
     perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' \
       bash "${BASH_SOURCE[0]}" --banner "$project" "$event" "$kind" "$say_pid" "$text" </dev/null >/dev/null 2>>"$LOG" &
     banner_pid=$!
   elif [ -z "$say_pid" ]; then
-    osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
-      "$project" "$text" 2>>"$LOG"
+    plain_banner "$project" "$text"
   fi
 }
 
 hide_banner() {
   [ -n "$banner_pid" ] || return
-  alerter --sender "$HELPER_APP_ID" --remove "earshot-$1" >/dev/null 2>>"$LOG"
+  remove_banner "earshot-$1"
   kill -- "-$banner_pid" 2>/dev/null
 }
 
@@ -159,6 +194,11 @@ speech_rate() {
   local rate=${EARSHOT_RATE:-$DEFAULT_RATE}
   [[ "$rate" =~ ^[0-9]+$ ]] || rate=$DEFAULT_RATE
   printf '%s' "$rate"
+}
+
+start_speech() {
+  printf '%s' "$1" | say -v "$voice" -r "$(speech_rate)" &
+  say_pid=$!
 }
 
 interrupt() {
@@ -182,11 +222,11 @@ speak_now() {
   paused_app=$(pausable_app)
   if [ -n "$paused_app" ]; then
     trap resume_paused_app EXIT
-    media-control pause
+    pause_app "$paused_app"
     log "paused $paused_app"
   fi
-  printf '%s' "$project: $text" | say -v "$voice" -r "$(speech_rate)" &
-  local say_pid=$!
+  local say_pid
+  start_speech "$project: $text"
   banner "$say_pid"
   wait "$say_pid"
   hide_banner "$say_pid"
@@ -211,9 +251,11 @@ configured_voice() {
 }
 
 best_voice() {
-  awk -F'\t' -v language="$1" -v fallback="$FALLBACK_VOICE" '
+  awk -F'\t' -v language="$1" -v fallback="$FALLBACK_VOICE" -v qualities="$VOICE_QUALITY" '
+    BEGIN { levels = split(qualities, quality, ";") }
     $1 == language {
-      rank = $2 ~ /\(Premium\)/ ? 0 : $2 ~ /\(Enhanced\)/ ? 1 : $2 == fallback ? 2 : 3
+      rank = $2 == fallback ? levels : levels + 1
+      for (i = levels; i >= 1; i--) if ($2 ~ quality[i]) rank = i - 1
       if (best == "" || rank < best_rank) { best = $2; best_rank = rank }
     }
     END { if (best != "") print best }' <<<"$voices"
@@ -241,14 +283,22 @@ resolve_voice() {
   if voice_installed "$default"; then
     printf '%s' "$default"
   else
-    printf '%s' "$FALLBACK_VOICE"
+    fallback_voice
   fi
+}
+
+fallback_voice() {
+  printf '%s' "$FALLBACK_VOICE"
+}
+
+with_lock() {
+  lockf -t "$LOCK_TIMEOUT" "$LOCK" "$@"
 }
 
 speak() {
   log "($voice) $project: $1"
   local status=0
-  lockf -t "$LOCK_TIMEOUT" "$LOCK" bash "${BASH_SOURCE[0]}" --speak "$project" "$event" "$kind" "$voice" "$1" 2>>"$LOG" || status=$?
+  with_lock bash "${BASH_SOURCE[0]}" --speak "$project" "$event" "$kind" "$voice" "$1" 2>>"$LOG" || status=$?
   case $status in
     0) ;;
     75) log "dropped, another line held the lock for ${LOCK_TIMEOUT}s" ;;
@@ -262,8 +312,14 @@ plain() {
     | sed -E 's/\[([^]]*)\]\([^)]*\)/\1/g; s/\[+/[/g; s/\]+/]/g; s/[*_`#>|]+//g; s/[[:space:]]+/ /g; s/^ //; s/ $//'
 }
 
+clip() {
+  local text
+  text=$(cat)
+  printf '%s' "${text:0:$LINE_MAX_CHARS}"
+}
+
 first_sentence() {
-  perl -pe 's/^(.*?[.!?])(\s.*)?$/$1/' | cut -c1-"$LINE_MAX_CHARS"
+  perl -pe 's/^(.*?[.!?])(\s.*)?$/$1/' | clip
 }
 
 split_language() {
@@ -306,7 +362,7 @@ summarize() {
 
 summary_failure() {
   local errors
-  errors=$(tr '\n' ' ' <"$summary_errors" | cut -c1-300)
+  errors=$(tr '\n' ' ' <"$summary_errors" | clip)
   case $summary_status in
     0) printf 'empty summary %s' "$errors" ;;
     142) printf 'timed out after %ss' "$SUMMARY_TIMEOUT" ;;
@@ -316,7 +372,7 @@ summary_failure() {
 
 main() {
   mkdir -p "$STATE_DIR" "$(dirname "$LOG")"
-  for tool in say lockf jq perl; do
+  for tool in "${REQUIRED_TOOLS[@]}"; do
     if ! command -v "$tool" >/dev/null; then
       printf '%s earshot needs %s, which is not installed\n' "$(date '+%F %T')" "$tool" >>"$LOG"
       exit 0
@@ -345,7 +401,7 @@ main() {
     Notification)
       voices=$(list_voices)
       voice=$(resolve_voice)
-      text=$(jq -r '.message // empty' <<<"$input" | plain | cut -c1-"$LINE_MAX_CHARS")
+      text=$(jq -r '.message // empty' <<<"$input" | plain | clip)
       speak "${text:-needs your attention}"
       ;;
     Stop)
@@ -362,7 +418,7 @@ main() {
         exit 0
       fi
       started=$(now)
-      text=$(summarize "$msg" | plain | cut -c1-"$LINE_MAX_CHARS"; exit "${PIPESTATUS[0]}")
+      text=$(summarize "$msg" | plain | clip; exit "${PIPESTATUS[0]}")
       summary_status=$?
       log "summary took $(elapsed_since "$started")s"
       wait
@@ -383,5 +439,7 @@ main() {
   esac
   exit 0
 }
+
+[ "$PLATFORM" = Linux ] && source "$PLUGIN_ROOT/scripts/linux.sh"
 
 [ "${BASH_SOURCE[0]}" = "$0" ] && main "$@"
