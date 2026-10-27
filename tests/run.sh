@@ -5,7 +5,9 @@ work="$(pwd)/tests/.work"
 rm -rf "$work" && mkdir -p "$work"
 trap 'rm -rf "$work"' EXIT
 
+uname() { printf 'Darwin\n'; }
 source scripts/earshot.sh
+unset -f uname
 LOG="$work/log"
 STATE_DIR="$work/state"
 MUTE="$STATE_DIR/muted-until"
@@ -54,7 +56,8 @@ check "summary_input wraps a short message" "$(summary_input 'hello')" $'<messag
 long=$(printf 'a%.0s' $(seq 1 2100))
 wrapped=$(summary_input "$long")
 check "summary_input keeps the tail of a long message" "${#wrapped}" "2022"
-check "summary_input marks the cut" "$(summary_input "$long" | sed -n 2p | cut -c1-1)" "…"
+check "summary_input marks the cut" "$(summary_input "$long" | sed -n 2p | head -c3)" "…"
+check "clip counts characters, not bytes" "$(printf 'ż%.0s' $(seq 1 400) | clip | wc -m | tr -d ' ')" "$LINE_MAX_CHARS"
 
 unset EARSHOT_VOICE EARSHOT_VOICES
 check "default voice" "$(resolve_voice)" "Ava (Premium)"
@@ -110,7 +113,7 @@ echo $(($(date +%s) - 60)) >"$MUTE"
 check "expired mute" "$(muted && echo muted || echo open)" "open"
 
 STATE_DIR="$work/state-new"
-check "state dir is created private to the user" "$(state_dir_ready && stat -f %Lp "$STATE_DIR")" "700"
+check "state dir is created private to the user" "$(state_dir_ready && { stat -c %a "$STATE_DIR" 2>/dev/null || stat -f %Lp "$STATE_DIR"; })" "700"
 ln -s "$work/state-new" "$work/state-link"
 STATE_DIR="$work/state-link"
 check "state dir refuses a symlink" "$(state_dir_ready && echo ready || echo refused)" "refused"
@@ -148,9 +151,59 @@ check "mic check decides from the recorders and the ignore list" \
   "$(/usr/bin/python3 -I tests/mic-check.py "$MIC_CHECK")" \
   "$(printf '1 []\n0 []\n0 []\n0 []\n1 [com.apple.siri]\n1 [siri zoom.us]\n0 []\n0 [com.apple.siri, siri us.zoom.xos, zoom.us]')"
 
-output=$(HOME="$work" PATH=/usr/bin:/bin ./scripts/session-start.sh)
-check "session-start lists a missing optional tool" "$(grep -c 'alerter (optional' <<<"$output")" "1"
-check "session-start gives no brew hint for say" "$(grep -c 'brew install say' <<<"$output")" "0"
+output=$(HOME="$work" XDG_DATA_HOME="$work" PATH=/usr/bin:/bin ./scripts/session-start.sh)
+if [ "$(uname)" = Darwin ]; then
+  check "session-start lists a missing optional tool" "$(grep -c 'alerter (optional' <<<"$output")" "1"
+  check "session-start gives no brew hint for say" "$(grep -c 'brew install say' <<<"$output")" "0"
+else
+  check "session-start lists missing Piper on Linux" "$(grep -c 'Piper with a voice (required' <<<"$output")" "1"
+  check "session-start gives no brew hint on Linux" "$(grep -c 'brew install' <<<"$output")" "0"
+fi
+
+uname() { printf 'Linux\n'; }
+source scripts/earshot.sh
+unset -f uname
+LOG="$work/log"
+LOCK="$work/lock"
+
+voices=$(printf 'en\ten_US-amy-medium\nen\ten_US-lessac-high\npl\tpl_PL-darkman-low\npl\tpl_PL-gosia-medium\n')
+unset EARSHOT_VOICE EARSHOT_VOICES
+check "linux default voice" "$(resolve_voice)" "en_US-amy-medium"
+check "linux prefers a medium voice to a low one" "$(resolve_voice pl)" "pl_PL-gosia-medium"
+EARSHOT_VOICE="nobody"
+check "linux falls back to the best English voice" "$(resolve_voice)" "en_US-lessac-high"
+voices=$(printf 'pl\tpl_PL-gosia-medium\n')
+check "linux falls back to any voice without an English one" "$(resolve_voice)" "pl_PL-gosia-medium"
+unset EARSHOT_VOICE
+
+check "linux length scale for the default rate" "$(length_scale)" "0.92"
+EARSHOT_RATE=340
+check "linux length scale for a faster rate" "$(length_scale)" "0.50"
+unset EARSHOT_RATE
+
+playerctl() {
+  case "$1:$3" in
+    -l:) printf 'spotify\nbrave.instance42\nfirefox.instance_1_9\n' ;;
+    -p:status) [ "$2" = firefox.instance_1_9 ] && echo Paused || echo Playing ;;
+    -p:metadata) [ "$2" = spotify ] && echo "$spotify_title" || echo "Some song" ;;
+  esac
+}
+spotify_title="Google Meet"
+check "linux pauses a playing browser by its player name" "$(pausable_app)" "brave"
+spotify_title="Some song"
+check "linux pauses the first playing app on the list" "$(pausable_app)" "spotify"
+EARSHOT_PAUSE_APPS="firefox"
+check "linux leaves a paused player alone" "$(pausable_app)" ""
+unset EARSHOT_PAUSE_APPS
+unset -f playerctl
+
+if command -v flock >/dev/null; then
+  flock "$LOCK" sleep 3 &
+  sleep 0.5
+  LOCK_TIMEOUT=1 with_lock true
+  check "linux lock timeout returns the status speak logs as dropped" "$?" "75"
+  wait
+fi
 
 versions=$(
   jq -r .version .claude-plugin/plugin.json

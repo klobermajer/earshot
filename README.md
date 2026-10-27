@@ -39,6 +39,30 @@ Nothing is shown when one of these is missing; the plugin just does less. When C
 starts, a quick check hands the list of missing tools to Claude as context, so asking it why
 nothing is spoken, or why there is no banner, gets a direct answer with the install command.
 
+### On Linux
+
+Earshot works the same on a Linux desktop with PipeWire; it is tested on Ubuntu 26.04 with GNOME.
+The macOS tools are replaced by:
+
+- **Piper** instead of `say`, a neural voice that runs offline. Install it with a voice:
+  `bash scripts/install-piper.sh` puts Piper and `en_US-amy-medium` into
+  `~/.local/share/earshot`; name more voices to add them, e.g.
+  `bash scripts/install-piper.sh pl_PL-gosia-medium`. The voices, with samples, are listed at
+  https://rhasspy.github.io/piper-samples/. The script needs `python3-venv` or `python3-pip`.
+- **`paplay`, `flock`, `jq` and `perl`**, all on a standard Ubuntu desktop.
+- **`python3-gi`, optional.** Needed for the banner buttons, shown by `scripts/linux-banner.py`.
+  Without it, a call gets a plain `notify-send` banner, and spoken lines get no banner.
+- **`playerctl`, optional.** Only needed for pausing music: `sudo apt install playerctl`.
+- **`pw-dump`, optional.** Call detection reads PipeWire's recording streams; it ships with
+  PipeWire (`pipewire-bin`).
+
+The settings below work the same, with Linux values: `EARSHOT_VOICE` and `EARSHOT_VOICES` take
+Piper voice names (default `en_US-amy-medium`; the best installed voice for a language is the
+`-high` one, then `-medium`, then `-low`), `EARSHOT_PAUSE_APPS` takes the player names
+`playerctl -l` shows, without the `.instance…` part (default `spotify,brave,chromium,firefox,vlc`),
+and `EARSHOT_MIC_IGNORE` takes the process names `mic-in-use.py --list` shows. The log is
+`~/.local/state/earshot/earshot.log`.
+
 ## Install
 
 ```
@@ -202,8 +226,8 @@ Each finished turn makes one Haiku call on your account, a fraction of a cent.
 
 ## What was said
 
-Every spoken or skipped line is logged to `~/Library/Logs/earshot.log`, with the time, project,
-event and voice:
+Every spoken or skipped line is logged to `~/Library/Logs/earshot.log`
+(`~/.local/state/earshot/earshot.log` on Linux), with the time, project, event and voice:
 
 ```
 2026-10-20 17:02:11 [my-app] Stop: (Ava (Premium)) my-app: Branch reviewed, 31 tests added.
@@ -234,6 +258,8 @@ such. The log is trimmed to its last 2000 lines when a session starts and it has
   Notifications is where banners can be turned off.
 - Permission prompts and questions are always read in English with `EARSHOT_VOICE`; only
   summaries follow the language of the message.
+- On Linux, a browser keeps the microphone open while you are muted in a call, so the whole
+  call counts as one and nothing is spoken until you leave it.
 
 ## Releasing a change
 
@@ -252,8 +278,10 @@ The helper app's icon, `AppIcon.icns`, is rendered from `assets/icon.svg`; regen
 
 Issues and pull requests are welcome. The whole plugin is `scripts/earshot.sh`, plain bash
 3.2 as shipped with macOS, plus `scripts/mic-in-use.py` for the mic check and
-`scripts/session-start.sh` for the log trim and the start-up context. `tests/run.sh` checks the
-text, voice and settings helpers without speaking. Try a checkout without installing it:
+`scripts/session-start.sh` for the log trim and the start-up context. On Linux,
+`scripts/linux.sh` replaces the few functions that call macOS tools, and
+`scripts/linux-banner.py` stands in for `alerter`. `tests/run.sh` checks the text, voice and
+settings helpers without speaking, for both systems. Try a checkout without installing it:
 `/plugin marketplace add ~/path/to/earshot`, then `/plugin install earshot@earshot`.
 
 ## Uninstall

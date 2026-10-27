@@ -1,13 +1,15 @@
 import ctypes
+import json
 import os
 import struct
 import subprocess
 import sys
 
-core_audio = ctypes.CDLL('/System/Library/Frameworks/CoreAudio.framework/CoreAudio')
-core_foundation = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
-core_foundation.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
-core_foundation.CFRelease.argtypes = [ctypes.c_void_p]
+if sys.platform == 'darwin':
+    core_audio = ctypes.CDLL('/System/Library/Frameworks/CoreAudio.framework/CoreAudio')
+    core_foundation = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+    core_foundation.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_uint32]
+    core_foundation.CFRelease.argtypes = [ctypes.c_void_p]
 
 SYSTEM_OBJECT = 1
 SCOPE_GLOBAL = 'glob'
@@ -64,6 +66,26 @@ def recording(process):
 
 def recorders():
     return [process for process in read(SYSTEM_OBJECT, PROCESS_OBJECT_LIST) if recording(process)]
+
+def pipewire_objects():
+    return json.loads(subprocess.run(['pw-dump'], capture_output=True, text=True).stdout or '[]')
+
+def properties(item):
+    return (item.get('info') or {}).get('props') or {}
+
+def pipewire_recorders():
+    objects = pipewire_objects()
+    clients = {item['id']: properties(item) for item in objects if item.get('type') == 'PipeWire:Interface:Client'}
+    streams = [properties(item) for item in objects if item.get('type') == 'PipeWire:Interface:Node']
+    return [{**clients.get(stream.get('client.id'), {}), **stream} for stream in streams
+            if stream.get('media.class') == 'Stream/Input/Audio' and not stream.get('stream.capture.sink')]
+
+def pipewire_names(process):
+    return {process[key].lower() for key in ('application.process.binary', 'application.name') if process.get(key)}
+
+if sys.platform.startswith('linux'):
+    recorders = pipewire_recorders
+    names = pipewire_names
 
 def list_recorders():
     found = recorders()
