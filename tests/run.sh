@@ -104,6 +104,13 @@ check "timed mute" "$(muted && echo muted || echo open)" "muted"
 echo $(($(date +%s) - 60)) >"$MUTE"
 check "expired mute" "$(muted && echo muted || echo open)" "open"
 
+STATE_DIR="$work/state-new"
+check "state dir is created private to the user" "$(state_dir_ready && stat -f %Lp "$STATE_DIR")" "700"
+ln -s "$work/state-new" "$work/state-link"
+STATE_DIR="$work/state-link"
+check "state dir refuses a symlink" "$(state_dir_ready && echo ready || echo refused)" "refused"
+STATE_DIR="$work/state"
+
 real_mic_check=$MIC_CHECK
 MIC_CHECK="$work/mic-check"
 export MIC_ARGS="$work/mic-args"

@@ -314,8 +314,16 @@ summary_failure() {
   esac
 }
 
+state_dir_ready() {
+  mkdir -p "$STATE_DIR" && [ ! -L "$STATE_DIR" ] && [ -O "$STATE_DIR" ] && chmod 700 "$STATE_DIR"
+}
+
 main() {
-  mkdir -p "$STATE_DIR" "$(dirname "$LOG")"
+  mkdir -p "$(dirname "$LOG")"
+  if ! state_dir_ready; then
+    printf '%s earshot refuses %s: it must be a directory owned by you, not a symlink\n' "$(date '+%F %T')" "$STATE_DIR" >>"$LOG"
+    exit 0
+  fi
   for tool in say lockf jq perl; do
     if ! command -v "$tool" >/dev/null; then
       printf '%s earshot needs %s, which is not installed\n' "$(date '+%F %T')" "$tool" >>"$LOG"
