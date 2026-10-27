@@ -98,7 +98,11 @@ unmute() {
 
 mic_in_use() {
   xcode-select -p >/dev/null 2>&1 || return 1
-  /usr/bin/python3 -I "$MIC_CHECK" 2>>"$LOG"
+  local ignored status
+  ignored=$(/usr/bin/python3 -I "$MIC_CHECK" --ignore "${EARSHOT_MIC_IGNORE-}" 2>>"$LOG")
+  status=$?
+  [ -n "$ignored" ] && log "mic used by $(tr '\n' ',' <<<"$ignored" | sed 's/,$//; s/,/, /g'), ignored"
+  return $status
 }
 
 stop_speaking() {

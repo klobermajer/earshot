@@ -95,6 +95,7 @@ in `env` does not reach hooks in a running session):
 | `EARSHOT_RATE`  | `185`      | Words per minute                                |
 | `EARSHOT_LANGUAGE` | none    | Two-letter code, e.g. `pl`: summaries are always written in this language |
 | `EARSHOT_PAUSE_APPS` | `com.spotify.client,com.apple.Music,com.apple.podcasts,com.google.Chrome,com.apple.Safari` | Comma-separated bundle IDs whose playback is paused while speaking |
+| `EARSHOT_MIC_IGNORE` | none | Comma-separated bundle IDs or process names whose recording does not count as a call, e.g. `com.apple.Siri,corespeechd` |
 | `EARSHOT_MUTE` | `0` | `1` never speaks; lines only appear as banners, as during a call |
 | `EARSHOT_BANNERS` | `1` | `0` shows no banners at all, spoken or not |
 | `EARSHOT_MEDIA` | `1` | `0` never pauses music or videos |
@@ -130,6 +131,25 @@ voices do. Try a voice first with
 A call is any time an app records from a microphone: Meet, Zoom, Teams, a Slack huddle, but
 also dictation or a voice memo. Before each line, the mic is checked; if it is in use, the line
 is shown as a banner and not spoken.
+
+An app that keeps the mic open without being a call, say a wake-word listener or a
+push-to-talk tool, can be left out with `EARSHOT_MIC_IGNORE`, a comma-separated list of bundle
+IDs or executable names, matched without regard to case:
+
+```json
+"EARSHOT_MIC_IGNORE": "com.apple.Siri,corespeechd"
+```
+
+Recording by anything on the list is logged as `mic used by com.apple.siri, ignored` and the
+line is spoken, unless another app records too. To see what is recording right now, with the
+bundle ID and executable name to put on the list, run the check by hand while the mic is in use:
+
+```
+/usr/bin/python3 "$(ls -d ~/.claude/plugins/cache/earshot/earshot/*/ | sort -V | tail -1)scripts/mic-in-use.py" --list
+```
+
+From a checkout, `python3 scripts/mic-in-use.py --list`. It prints one line per recording
+process, e.g. `com.apple.siri, siri`, or nothing when the mic is free.
 
 The banner works for every Claude session at once:
 
@@ -191,6 +211,7 @@ event and voice:
 2026-10-20 17:05:40 [my-app] Stop: skipped, only waiting on background work
 2026-10-20 17:06:02 [my-app] Notification/permission_prompt: (Ava (Premium)) my-app: Claude needs your permission to use Bash
 2026-10-20 17:10:15 [my-app] Stop: mic in use, banner only
+2026-10-20 17:11:30 [my-app] Stop: mic used by com.apple.siri, ignored
 2026-10-20 17:12:40 [my-app] Stop: muted for 30 min
 2026-10-20 17:20:03 [my-app] Stop: unmuted
 ```

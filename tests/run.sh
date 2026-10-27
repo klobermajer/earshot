@@ -104,6 +104,38 @@ check "timed mute" "$(muted && echo muted || echo open)" "muted"
 echo $(($(date +%s) - 60)) >"$MUTE"
 check "expired mute" "$(muted && echo muted || echo open)" "open"
 
+real_mic_check=$MIC_CHECK
+MIC_CHECK="$work/mic-check"
+export MIC_ARGS="$work/mic-args"
+cat >"$MIC_CHECK" <<'EOF'
+import os
+import sys
+open(os.environ['MIC_ARGS'], 'w').write(sys.argv[2])
+if sys.argv[2]:
+    print('com.apple.siri')
+    sys.exit(1)
+sys.exit(0)
+EOF
+if xcode-select -p >/dev/null 2>&1; then
+  unset EARSHOT_MIC_IGNORE
+  check "mic in use without an ignore list" "$(mic_in_use && echo busy || echo free)" "busy"
+  check "mic check gets an empty list by default" "$(cat "$MIC_ARGS")" ""
+  EARSHOT_MIC_IGNORE="com.apple.Siri, corespeechd"
+  check "ignored recorder leaves the mic free" "$(mic_in_use && echo busy || echo free)" "free"
+  check "mic check gets the ignore list" "$(cat "$MIC_ARGS")" "com.apple.Siri, corespeechd"
+  check "log names the ignored recorder" "$(grep -c 'mic used by com.apple.siri, ignored' "$LOG")" "1"
+  unset EARSHOT_MIC_IGNORE
+fi
+MIC_CHECK=$real_mic_check
+unset MIC_ARGS
+
+check "ignore list is split, trimmed and lowercased" \
+  "$(/usr/bin/python3 -I -c "import importlib.util, sys; spec = importlib.util.spec_from_file_location('mic', sys.argv[1]); mic = importlib.util.module_from_spec(spec); spec.loader.exec_module(mic); print(sorted(mic.ignored_names(' com.apple.Siri ,corespeechd,, ')))" "$MIC_CHECK")" \
+  "['com.apple.siri', 'corespeechd']"
+check "mic check decides from the recorders and the ignore list" \
+  "$(/usr/bin/python3 -I tests/mic-check.py "$MIC_CHECK")" \
+  "$(printf '1 []\n0 []\n0 []\n0 []\n1 [com.apple.siri]\n1 [siri zoom.us]\n0 []\n0 [com.apple.siri, siri us.zoom.xos, zoom.us]')"
+
 output=$(HOME="$work" PATH=/usr/bin:/bin ./scripts/session-start.sh)
 check "session-start lists a missing optional tool" "$(grep -c 'alerter (optional' <<<"$output")" "1"
 check "session-start gives no brew hint for say" "$(grep -c 'brew install say' <<<"$output")" "0"
