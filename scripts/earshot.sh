@@ -346,7 +346,7 @@ main() {
   input=$(cat)
   event=$(jq -r '.hook_event_name // empty' <<<"$input")
   kind=$(jq -r '.notification_type // empty' <<<"$input")
-  project=$(basename "$(jq -r '.cwd // empty' <<<"$input")")
+  project=$(basename "$(jq -r '.cwd // empty' <<<"$input")" | plain)
   project=${project:-claude}
 
   case "$event" in
