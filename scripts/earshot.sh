@@ -99,12 +99,18 @@ muted() {
   flag EARSHOT_MUTE 0 && return 0
   local until
   until=$(cat "$MUTE" 2>/dev/null)
+  [ "$until" = forever ] && return 0
   [[ "$until" =~ ^[0-9]+$ ]] && [ "$until" -gt "$(date +%s)" ]
 }
 
 mute_for() {
   echo $(($(date +%s) + $1)) >"$MUTE"
   log "muted for $(($1 / 60)) min"
+}
+
+mute_until_unmuted() {
+  echo forever >"$MUTE"
+  log "muted until unmuted"
 }
 
 unmute() {
@@ -127,8 +133,8 @@ mic_in_use() {
 
 stop_speaking() {
   [ -n "$say_pid" ] && [[ "$(ps -p "$say_pid" -o comm= 2>/dev/null)" =~ (^|/)$SPEECH_COMMAND$ ]] || return
-  kill "$say_pid"
   log "stopped"
+  kill "$say_pid"
 }
 
 register_helper_app() {
@@ -164,11 +170,12 @@ show_banner() {
   elif muted; then
     options+=(--actions Unmute)
   else
-    options+=(--actions "Mute 30 min")
+    options+=(--actions "Mute 30 min,Mute")
   fi
   case $(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT") in
     @CLOSED | Close) stop_speaking ;;
     "Mute 30 min") mute_for 1800; stop_speaking ;;
+    Mute) mute_until_unmuted; stop_speaking ;;
     Unmute) unmute ;;
   esac
 }

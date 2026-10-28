@@ -111,6 +111,11 @@ echo $(($(date +%s) + 60)) >"$MUTE"
 check "timed mute" "$(muted && echo muted || echo open)" "muted"
 echo $(($(date +%s) - 60)) >"$MUTE"
 check "expired mute" "$(muted && echo muted || echo open)" "open"
+mute_until_unmuted
+check "mute until unmuted" "$(muted && echo muted || echo open)" "muted"
+check "log notes the mute until unmuted" "$(grep -c 'muted until unmuted' "$LOG")" "1"
+unmute
+check "unmute ends a mute until unmuted" "$(muted && echo muted || echo open)" "open"
 
 STATE_DIR="$work/state-new"
 check "state dir is created private to the user" "$(state_dir_ready && { stat -c %a "$STATE_DIR" 2>/dev/null || stat -f %Lp "$STATE_DIR"; })" "700"
