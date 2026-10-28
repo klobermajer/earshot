@@ -11,7 +11,7 @@ NOTIFICATIONS = ('org.freedesktop.Notifications', '/org/freedesktop/Notification
 DISMISSED_BY_USER = 2
 
 parser = argparse.ArgumentParser()
-for option in ('--icon', '--title', '--message', '--group', '--actions'):
+for option in ('--icon', '--title', '--message', '--group', '--actions', '--dropdown-label'):
     parser.add_argument(option, default='')
 parser.add_argument('--timeout', type=int, default=120)
 arguments = parser.parse_args()

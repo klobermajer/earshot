@@ -14,6 +14,7 @@ STATE_DIR="${TMPDIR:-$HOME/Library/Caches}/earshot"
 LOG="$HOME/Library/Logs/earshot.log"
 LOCK="$STATE_DIR/lock"
 MUTE="$STATE_DIR/muted-until"
+MUTE_ACTIONS="Mute 30 min,Mute 4 h,Mute until tomorrow,Mute this session"
 REGISTERED="$STATE_DIR/registered"
 MIC_CHECK="$PLUGIN_ROOT/scripts/mic-in-use.py"
 HELPER_APP="$PLUGIN_ROOT/app/Earshot.app"
@@ -98,9 +99,19 @@ resume_paused_app() {
 muted() {
   flag EARSHOT_MUTE 0 && return 0
   local until
+  [ -n "$session" ] && [ -f "$(session_mute)" ] && return 0
   until=$(cat "$MUTE" 2>/dev/null)
-  [ "$until" = forever ] && return 0
   [[ "$until" =~ ^[0-9]+$ ]] && [ "$until" -gt "$(date +%s)" ]
+}
+
+session_mute() {
+  printf '%s' "$STATE_DIR/muted-session-$session"
+}
+
+mute_session() {
+  [ -n "$session" ] || return
+  : >"$(session_mute)"
+  log "muted this session"
 }
 
 mute_for() {
@@ -108,13 +119,17 @@ mute_for() {
   log "muted for $(($1 / 60)) min"
 }
 
-mute_until_unmuted() {
-  echo forever >"$MUTE"
-  log "muted until unmuted"
+tomorrow_morning() {
+  perl -MPOSIX -e '@now = localtime; print mktime(0, 0, 8, $now[3] + 1, $now[4], $now[5])'
+}
+
+mute_until_tomorrow() {
+  tomorrow_morning >"$MUTE"
+  log "muted until tomorrow 8:00"
 }
 
 unmute() {
-  rm -f "$MUTE"
+  rm -f "$MUTE" "$(session_mute)"
   log "unmuted"
 }
 
@@ -170,12 +185,14 @@ show_banner() {
   elif muted; then
     options+=(--actions Unmute)
   else
-    options+=(--actions "Mute 30 min,Mute")
+    options+=(--dropdown-label Mute --actions "$MUTE_ACTIONS")
   fi
   case $(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT") in
     @CLOSED | Close) stop_speaking ;;
     "Mute 30 min") mute_for 1800; stop_speaking ;;
-    Mute) mute_until_unmuted; stop_speaking ;;
+    "Mute 4 h") mute_for 14400; stop_speaking ;;
+    "Mute until tomorrow") mute_until_tomorrow; stop_speaking ;;
+    "Mute this session") mute_session; stop_speaking ;;
     Unmute) unmute ;;
   esac
 }
@@ -185,7 +202,7 @@ banner() {
   flag EARSHOT_BANNERS 1 || return
   if banner_available; then
     perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' \
-      bash "${BASH_SOURCE[0]}" --banner "$project" "$event" "$kind" "$say_pid" "$text" </dev/null >/dev/null 2>>"$LOG" &
+      bash "${BASH_SOURCE[0]}" --banner "$project" "$event" "$kind" "$say_pid" "$text" "$session" </dev/null >/dev/null 2>>"$LOG" &
     banner_pid=$!
   elif [ -z "$say_pid" ]; then
     plain_banner "$project" "$text"
@@ -319,7 +336,7 @@ shorten() {
 speak() {
   log "($voice) $project: $(shorten "$1")"
   local status=0
-  with_lock bash "${BASH_SOURCE[0]}" --speak "$project" "$event" "$kind" "$voice" "$1" 2>>"$LOG" || status=$?
+  with_lock bash "${BASH_SOURCE[0]}" --speak "$project" "$event" "$kind" "$voice" "$1" "$session" 2>>"$LOG" || status=$?
   case $status in
     0) ;;
     75) log "dropped, another line held the lock for ${LOCK_TIMEOUT}s" ;;
@@ -409,13 +426,13 @@ main() {
   done
 
   if [ "$1" = "--speak" ]; then
-    project=$2 event=$3 kind=$4 voice=$5 text=$6
+    project=$2 event=$3 kind=$4 voice=$5 text=$6 session=$7
     speak_now
     exit 0
   fi
 
   if [ "$1" = "--banner" ]; then
-    project=$2 event=$3 kind=$4 say_pid=$5 text=$6
+    project=$2 event=$3 kind=$4 say_pid=$5 text=$6 session=$7
     show_banner
     exit 0
   fi
@@ -423,10 +440,14 @@ main() {
   input=$(cat)
   event=$(jq -r '.hook_event_name // empty' <<<"$input")
   kind=$(jq -r '.notification_type // empty' <<<"$input")
+  session=$(jq -r '.session_id // empty' <<<"$input" | tr -cd 'A-Za-z0-9-')
   project=$(basename "$(jq -r '.cwd // empty' <<<"$input")" | plain)
   project=${project:-claude}
 
   case "$event" in
+    SessionEnd)
+      [ -n "$session" ] && rm -f "$(session_mute)"
+      ;;
     Notification)
       voices=$(list_voices)
       voice=$(resolve_voice)
