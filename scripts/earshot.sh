@@ -185,7 +185,7 @@ show_banner() {
   elif muted; then
     options+=(--actions Unmute)
   else
-    options+=(--dropdown-label Mute --actions "$MUTE_ACTIONS")
+    options+=(--actions "$MUTE_ACTIONS")
   fi
   case $(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT") in
     @CLOSED | Close) stop_speaking ;;
