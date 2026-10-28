@@ -127,6 +127,36 @@ unmute
 check "unmute ends the session mute" "$(muted && echo muted || echo open)" "open"
 session=
 
+alert() {
+  printf '%s\n' "$@" >"$work/alert-args"
+  printf '%s' "$alert_choice"
+  return "$alert_status"
+}
+say_pid= alert_choice= alert_status=133
+show_banner
+check "the first mute choice is the dropdown label" "$(sed -n '/^--dropdown-label$/{n;p;}' "$work/alert-args")" "Mute 30 min"
+check "the other mute choices are the actions" "$(sed -n '/^--actions$/{n;p;}' "$work/alert-args")" "Mute 4 h,Mute until tomorrow,Mute this session"
+check "alerter trapping on Apple silicon after a label click mutes for 30 min" "$(tail -n1 "$LOG" | sed 's/.*: //')" "muted for 30 min"
+unmute
+alert_status=132
+show_banner
+check "alerter trapping on Intel after a label click mutes for 30 min" "$(tail -n1 "$LOG" | sed 's/.*: //')" "muted for 30 min"
+unmute
+alert_status=1
+show_banner
+check "another alerter failure is not a label click" "$(muted && echo muted || echo open)" "open"
+alert_status=133
+mute_for 14400
+before=$(cat "$MUTE")
+show_banner
+check "alerter crashing on the Unmute banner keeps the mute" "$(cat "$MUTE")" "$before"
+unmute
+alert_choice="Mute 4 h" alert_status=0
+show_banner
+check "a mute choice from the menu" "$(tail -n1 "$LOG" | sed 's/.*: //')" "muted for 240 min"
+unmute
+unset -f alert
+
 STATE_DIR="$work/state-new"
 check "state dir is created private to the user" "$(state_dir_ready && { stat -c %a "$STATE_DIR" 2>/dev/null || stat -f %Lp "$STATE_DIR"; })" "700"
 ln -s "$work/state-new" "$work/state-link"
@@ -211,6 +241,18 @@ EARSHOT_PAUSE_APPS="firefox"
 check "linux leaves a paused player alone" "$(pausable_app)" ""
 unset EARSHOT_PAUSE_APPS
 unset -f playerctl
+
+STATE_DIR="$work/state"
+MUTE="$STATE_DIR/muted-until"
+alert() {
+  printf '%s\n' "$@" >"$work/alert-args"
+  return 133
+}
+show_banner
+check "linux shows every mute choice as a button" "$(sed -n '/^--actions$/{n;p;}' "$work/alert-args")" "Mute 30 min,Mute until tomorrow,Mute this session"
+check "linux passes no dropdown label" "$(grep -c '^--dropdown-label$' "$work/alert-args")" "0"
+check "linux does not take a crash for a mute" "$(muted && echo muted || echo open)" "open"
+unset -f alert
 
 if command -v flock >/dev/null; then
   flock "$LOCK" sleep 3 &

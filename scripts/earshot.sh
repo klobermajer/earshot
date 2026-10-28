@@ -15,6 +15,7 @@ LOG="$HOME/Library/Logs/earshot.log"
 LOCK="$STATE_DIR/lock"
 MUTE="$STATE_DIR/muted-until"
 MUTE_ACTIONS="Mute 30 min,Mute 4 h,Mute until tomorrow,Mute this session"
+SWIFT_TRAP_STATUS='^(132|133)$'
 REGISTERED="$STATE_DIR/registered"
 MIC_CHECK="$PLUGIN_ROOT/scripts/mic-in-use.py"
 HELPER_APP="$PLUGIN_ROOT/app/Earshot.app"
@@ -177,17 +178,25 @@ remove_banner() {
   alerter --sender "$HELPER_APP_ID" --remove "$1" >/dev/null 2>>"$LOG"
 }
 
+mute_menu() {
+  label=${MUTE_ACTIONS%%,*}
+  options+=(--dropdown-label "$label" --actions "${MUTE_ACTIONS#*,}")
+}
+
 show_banner() {
-  local options=()
+  local options=() label= choice status
   [ -n "$say_pid" ] && options+=(--group "earshot-$say_pid")
   if flag EARSHOT_MUTE 0; then
     :
   elif muted; then
     options+=(--actions Unmute)
   else
-    options+=(--actions "$MUTE_ACTIONS")
+    mute_menu
   fi
-  case $(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT") in
+  choice=$(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT")
+  status=$?
+  [ -z "$choice" ] && [[ "$status" =~ $SWIFT_TRAP_STATUS ]] && choice=$label
+  case $choice in
     @CLOSED | Close) stop_speaking ;;
     "Mute 30 min") mute_for 1800; stop_speaking ;;
     "Mute 4 h") mute_for 14400; stop_speaking ;;
