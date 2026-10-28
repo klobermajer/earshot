@@ -56,6 +56,10 @@ remove_banner() {
   :
 }
 
+mute_menu() {
+  options+=(--actions "$MUTE_ACTIONS")
+}
+
 length_scale() {
   awk -v base="$PIPER_WORDS_PER_MINUTE" -v rate="$(speech_rate)" 'BEGIN { printf "%.2f", base / rate }'
 }
