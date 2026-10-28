@@ -111,6 +111,21 @@ echo $(($(date +%s) + 60)) >"$MUTE"
 check "timed mute" "$(muted && echo muted || echo open)" "muted"
 echo $(($(date +%s) - 60)) >"$MUTE"
 check "expired mute" "$(muted && echo muted || echo open)" "open"
+morning=$(tomorrow_morning)
+check "tomorrow morning is 8:00" "$(perl -MPOSIX -e 'print strftime("%H:%M", localtime shift)' "$morning")" "08:00"
+check "tomorrow morning is the next day" "$(perl -MPOSIX -e 'print strftime("%F", localtime shift)' "$morning")" "$(perl -MPOSIX -e '@now = localtime; print strftime("%F", 0, 0, 12, $now[3] + 1, $now[4], $now[5])')"
+mute_until_tomorrow
+check "mute until tomorrow" "$(muted && echo muted || echo open)" "muted"
+unmute
+session=session-a
+mute_session
+check "a muted session is muted" "$(muted && echo muted || echo open)" "muted"
+session=session-b
+check "another session still speaks" "$(muted && echo muted || echo open)" "open"
+session=session-a
+unmute
+check "unmute ends the session mute" "$(muted && echo muted || echo open)" "open"
+session=
 
 STATE_DIR="$work/state-new"
 check "state dir is created private to the user" "$(state_dir_ready && { stat -c %a "$STATE_DIR" 2>/dev/null || stat -f %Lp "$STATE_DIR"; })" "700"

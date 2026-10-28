@@ -49,7 +49,7 @@ def on_signal(connection, sender, path, interface, name, params):
 for name in ('ActionInvoked', 'NotificationClosed'):
     bus.signal_subscribe(None, NOTIFICATIONS[2], name, NOTIFICATIONS[1], None, Gio.DBusSignalFlags.NONE, on_signal)
 
-actions = [arguments.actions, arguments.actions] if arguments.actions else []
+actions = [part for action in arguments.actions.split(',') if action for part in (action, action)]
 body = GLib.markup_escape_text(arguments.message)
 result['id'] = call('Notify', GLib.Variant('(susssasa{sv}i)', ('Earshot', 0, arguments.icon, arguments.title, body, actions, {}, -1)), '(u)')[0]
 GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, close, None)

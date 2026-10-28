@@ -13,8 +13,8 @@ Keeps Claude Code within earshot: hear what it is doing without watching the ter
 - **When you are on a call**, nothing is said. The line appears as a banner instead (see
   [Calls and muting](#calls-and-muting)).
 
-While a line is spoken, a banner shows it with a **Mute 30 min** button; closing the banner stops
-the line. The banner goes away when the line ends.
+While a line is spoken, a banner shows it with a **Mute** menu; closing the banner stops the line.
+The banner goes away when the line ends.
 
 Several sessions take turns instead of talking over each other. Music playing in Spotify, Music, Podcasts
 or a video in Chrome or Safari is paused while a line is spoken and resumed afterwards (needs
@@ -179,9 +179,18 @@ The banner works for every Claude session at once:
 
 - **Closing it** ends the line being spoken, whether from the banner or from Notification
   Center.
-- **Mute 30 min** ends it and keeps everything silent for 30 minutes, counted from the click.
-  Lines still appear as banners while muted, with **Unmute** in place of the button; it ends
-  the mute early.
+- **Mute** ends it and keeps things silent. Pick how long from the menu:
+  - **Mute 30 min** and **Mute 4 h** silence every session for that long, counted from the
+    click;
+  - **Mute until tomorrow** silences every session until 8:00 the next morning;
+  - **Mute this session** silences only the session the line came from, until you unmute it or
+    the session ends; other sessions keep talking.
+
+  Lines still appear as banners while muted, with **Unmute** in place of the menu; it ends the
+  mute early, both the one for every session and the one for that session. Mutes live in the
+  temporary directory, so a restart ends them too.
+
+On Linux each choice is its own button, and GNOME shows at most three, so there is no **Mute 4 h**.
 
 To stay silent for good, set `EARSHOT_MUTE` to `1`: every line is then a banner without a
 button. `EARSHOT_BANNERS` set to `0` turns the banners off instead, so a muted line or a line
@@ -237,6 +246,7 @@ Every spoken or skipped line is logged to `~/Library/Logs/earshot.log`
 2026-10-20 17:10:15 [my-app] Stop: mic in use, banner only
 2026-10-20 17:11:30 [my-app] Stop: mic used by com.apple.siri, ignored
 2026-10-20 17:12:40 [my-app] Stop: muted for 30 min
+2026-10-20 17:15:10 [other-app] Stop: muted this session
 2026-10-20 17:20:03 [my-app] Stop: unmuted
 ```
 
