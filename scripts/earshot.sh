@@ -15,7 +15,7 @@ LOG="$HOME/Library/Logs/earshot.log"
 LOCK="$STATE_DIR/lock"
 MUTE="$STATE_DIR/muted-until"
 MUTE_ACTIONS="Mute 30 min,Mute 4 h,Mute until tomorrow,Mute this session"
-DROPDOWN_LABEL_CRASH=133
+SWIFT_TRAP_STATUS='^(132|133)$'
 REGISTERED="$STATE_DIR/registered"
 MIC_CHECK="$PLUGIN_ROOT/scripts/mic-in-use.py"
 HELPER_APP="$PLUGIN_ROOT/app/Earshot.app"
@@ -195,7 +195,7 @@ show_banner() {
   fi
   choice=$(alert --title "$project" --message "$text" "${options[@]}" --timeout "$BANNER_TIMEOUT")
   status=$?
-  [ -z "$choice" ] && [ "$status" -eq "$DROPDOWN_LABEL_CRASH" ] && choice=$label
+  [ -z "$choice" ] && [[ "$status" =~ $SWIFT_TRAP_STATUS ]] && choice=$label
   case $choice in
     @CLOSED | Close) stop_speaking ;;
     "Mute 30 min") mute_for 1800; stop_speaking ;;

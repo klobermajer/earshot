@@ -132,11 +132,20 @@ alert() {
   printf '%s' "$alert_choice"
   return "$alert_status"
 }
-say_pid= alert_choice= alert_status=$DROPDOWN_LABEL_CRASH
+say_pid= alert_choice= alert_status=133
 show_banner
 check "the first mute choice is the dropdown label" "$(sed -n '/^--dropdown-label$/{n;p;}' "$work/alert-args")" "Mute 30 min"
 check "the other mute choices are the actions" "$(sed -n '/^--actions$/{n;p;}' "$work/alert-args")" "Mute 4 h,Mute until tomorrow,Mute this session"
-check "alerter crashing on the dropdown label mutes for 30 min" "$(tail -n1 "$LOG" | sed 's/.*: //')" "muted for 30 min"
+check "alerter trapping on Apple silicon after a label click mutes for 30 min" "$(tail -n1 "$LOG" | sed 's/.*: //')" "muted for 30 min"
+unmute
+alert_status=132
+show_banner
+check "alerter trapping on Intel after a label click mutes for 30 min" "$(tail -n1 "$LOG" | sed 's/.*: //')" "muted for 30 min"
+unmute
+alert_status=1
+show_banner
+check "another alerter failure is not a label click" "$(muted && echo muted || echo open)" "open"
+alert_status=133
 mute_for 14400
 before=$(cat "$MUTE")
 show_banner
@@ -237,7 +246,7 @@ STATE_DIR="$work/state"
 MUTE="$STATE_DIR/muted-until"
 alert() {
   printf '%s\n' "$@" >"$work/alert-args"
-  return "$DROPDOWN_LABEL_CRASH"
+  return 133
 }
 show_banner
 check "linux shows every mute choice as a button" "$(sed -n '/^--actions$/{n;p;}' "$work/alert-args")" "Mute 30 min,Mute until tomorrow,Mute this session"
